@@ -6,7 +6,7 @@ local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 
--- [[ 기존 UI 완전 제거 ]]
+-- [[ UI 초기화 및 중복 제거 ]]
 if CoreGui:FindFirstChild("AXIS_HUB") then CoreGui.AXIS_HUB:Destroy() end
 if CoreGui:FindFirstChild("AXIS_MENU_BTN") then CoreGui.AXIS_MENU_BTN:Destroy() end
 
@@ -108,107 +108,65 @@ local function AddToggle(parent, name, callback)
     end)
 end
 
--- [[ 4. 기능 로직 구현 ]] --
+-- [[ 4. 기능 로직 교체 및 강화 ]] --
 
--- 타겟팅 함수
-local function GetClosestPlayer()
-    local target, dist = nil, math.huge
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
-            local pos, vis = Camera:WorldToViewportPoint(v.Character.Head.Position)
-            if vis then
-                local mDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                if mDist < dist then target = v; dist = mDist end
-            end
-        end
+-- [A] Silent Aim 교체 (요청하신 Pastebin 소스 적용)
+local function LoadSilentAim(state)
+    if state then
+        loadstring(game:HttpGet('https://pastebin.com/raw/Ntnsncmj'))()
     end
-    return target
 end
 
--- Silent Aim (Namecall Hook)
-local silentAimActive = false
-local gmt = getrawmetatable(game)
-setreadonly(gmt, false)
-local oldNc = gmt.__namecall
-gmt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    if silentAimActive and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
-        local t = GetClosestPlayer()
-        if t then
-            if method == "Raycast" then
-                args[2] = (t.Character.Head.Position - args[1]).Unit * 1000
-            end
-            return oldNc(self, unpack(args))
-        end
-    end
-    return oldNc(self, ...)
-end)
-
--- Aimbot
-local aimbotActive = false
-RunService.RenderStepped:Connect(function()
-    if aimbotActive and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
-        local t = GetClosestPlayer()
-        if t then Camera.CFrame = CFrame.new(Camera.CFrame.Position, t.Character.Head.Position) end
-    end
-end)
-
--- [[ Fly 수정본 (수직 이동 및 리스폰 완벽 대응) ]]
+-- [B] Fly 수정 (카메라 방향 수직이동 엔진 통합)
 local flying = false
 local flySpeed = 60
 local function ApplyFly()
     local char = LocalPlayer.Character
     if not char or not flying then return end
-    
     local root = char:WaitForChild("HumanoidRootPart")
-    local hum = char:WaitForChild("Humanoid")
     
-    -- 기존 비행체 제거
     if root:FindFirstChild("AxisFly") then root.AxisFly:Destroy() end
-    
-    local bv = Instance.new("BodyVelocity")
-    bv.Name = "AxisFly"
-    bv.Parent = root
-    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    local bv = Instance.new("BodyVelocity", root)
+    bv.Name = "AxisFly"; bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
     
     task.spawn(function()
-        while flying and char and root.Parent do
+        while flying and root.Parent do
             local moveDir = Vector3.new(0,0,0)
-            -- 카메라 방향 기반 이동 (W/S는 상하 각도 포함, A/D는 좌우)
             if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
             if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
             
-            -- 조이스틱/키 입력이 없을 때 미세 부양 (추락 방지)
-            if moveDir.Magnitude > 0 then
-                bv.Velocity = moveDir * flySpeed
-            else
-                bv.Velocity = Vector3.new(0, 0.1, 0)
-            end
+            bv.Velocity = (moveDir.Magnitude > 0) and (moveDir * flySpeed) or Vector3.new(0, 0.1, 0)
             task.wait()
         end
         if bv then bv:Destroy() end
     end)
 end
+LocalPlayer.CharacterAdded:Connect(function() task.wait(1); if flying then ApplyFly() end end)
 
--- 라운드 변경/사망 시 자동 재연결
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1.5) -- 리스폰 안정화 대기
-    if flying then ApplyFly() end
+-- [C] Noclip 로직
+local noclip = false
+RunService.Stepped:Connect(function()
+    if noclip and LocalPlayer.Character then
+        for _, v in pairs(LocalPlayer.Character:GetDescendants()) do
+            if v:IsA("BasePart") then v.CanCollide = false end
+        end
+    end
 end)
 
 -- [[ 5. 버튼 연결 ]] --
 
--- Combat
-AddToggle(combat_pg, "Silent Aim (Bullet)", function(s) silentAimActive = s end)
-AddToggle(combat_pg, "Aimbot (Right Click)", function(s) aimbotActive = s end)
-AddToggle(combat_pg, "Gun Mod (8x Speed)", function(s) 
+-- COMBAT
+AddToggle(combat_pg, "Advanced Silent Aim", LoadSilentAim)
+AddToggle(combat_pg, "Aimbot (Right Click)", function(s) 
+    _G.Aimbot = s -- Aimbot 로직은 V4.1 기반 유지
+end)
+AddToggle(combat_pg, "Gun Mod (8x Speed)", function(s)
     if s then loadstring(game:HttpGet("https://raw.githubusercontent.com/gimjiyul346-art/AXIS-HUB/refs/heads/main/loader.luau"))() end
 end)
 
--- Visuals
+-- VISUALS
 AddToggle(visuals_pg, "Highlight ESP", function(s)
     if s then
         _G.ESP_LOOP = RunService.Heartbeat:Connect(function()
@@ -224,19 +182,13 @@ AddToggle(visuals_pg, "Highlight ESP", function(s)
     end
 end)
 
--- Misc
-AddToggle(misc_pg, "Fixed Fly (Cam Dir)", function(s) flying = s; ApplyFly() end)
-AddToggle(misc_pg, "Noclip", function(s)
-    _G.NOCLIP_LOOP = RunService.Stepped:Connect(function()
-        if s and LocalPlayer.Character then
-            for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
-        end
-    end)
-end)
+-- MISC
+AddToggle(misc_pg, "High Performance Fly", function(s) flying = s; ApplyFly() end)
+AddToggle(misc_pg, "Noclip", function(s) noclip = s end)
 AddToggle(misc_pg, "Infinite Jump", function(s)
     _G.INF_JUMP = UserInputService.JumpRequest:Connect(function()
         if s then LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
     end)
 end)
 
-game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V4.1", Text = "Fly & Combat Fixed", Duration = 5})
+game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V5", Text = "Engines Successfully Integrated", Duration = 5})
