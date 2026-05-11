@@ -16,7 +16,7 @@ ScreenGui.Name = "AXIS_HUB"
 -- [ 1. MENU 버튼 ]
 local MenuBtn = Instance.new("TextButton", CoreGui)
 MenuBtn.Name = "AXIS_MENU_BTN"
-MenuBtn.Size = UDim2.new(0, 65, 0, 65)
+MenuBtn.Size = UDim2.new(0, 60, 0, 60)
 MenuBtn.Position = UDim2.new(0, 15, 0.45, 0)
 MenuBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
 MenuBtn.Text = "MENU"
@@ -29,8 +29,8 @@ Instance.new("UICorner", MenuBtn).CornerRadius = UDim.new(1, 0)
 -- [ 2. 메인 프레임 ]
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainFrame.Size = UDim2.new(0, 480, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -240, 0.5, -190)
+MainFrame.Size = UDim2.new(0, 450, 0, 350)
+MainFrame.Position = UDim2.new(0.5, -225, 0.5, -175)
 MainFrame.Visible = true
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -42,23 +42,22 @@ end)
 
 -- [ 3. 탭 시스템 ]
 local TabBar = Instance.new("Frame", MainFrame)
-TabBar.Size = UDim2.new(1, 0, 0, 45)
+TabBar.Size = UDim2.new(1, 0, 0, 40)
 TabBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 Instance.new("UIListLayout", TabBar).FillDirection = "Horizontal"
 
 local Pages = Instance.new("Frame", MainFrame)
-Pages.Position = UDim2.new(0, 10, 0, 55)
-Pages.Size = UDim2.new(1, -20, 1, -65)
+Pages.Position = UDim2.new(0, 10, 0, 50)
+Pages.Size = UDim2.new(1, -20, 1, -60)
 Pages.BackgroundTransparency = 1
 
 local TabPages = {}
 local function CreateTab(name)
     local btn = Instance.new("TextButton", TabBar)
-    btn.Size = UDim2.new(0, 120, 1, 0)
+    btn.Size = UDim2.new(0, 110, 1, 0)
     btn.Text = name:upper()
     btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     btn.TextColor3 = Color3.fromRGB(180, 180, 180)
-    btn.Font = "GothamBold"
     
     local pg = Instance.new("ScrollingFrame", Pages)
     pg.Size = UDim2.new(1, 0, 1, 0)
@@ -75,33 +74,31 @@ local function CreateTab(name)
     return pg
 end
 
-local main_pg = CreateTab("Main")
-local esp_pg = CreateTab("ESP")
+local combat_pg = CreateTab("Combat")
+local visuals_pg = CreateTab("Visuals")
 local misc_pg = CreateTab("Misc")
-TabPages["Main"].Visible = true
+TabPages["Combat"].Visible = true
 
--- [ 4. 공용 토글 함수 ]
 local function AddToggle(parent, name, callback)
     local Frame = Instance.new("Frame", parent)
-    Frame.Size = UDim2.new(1, 0, 0, 42)
-    Frame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    Frame.Size = UDim2.new(1, 0, 0, 40)
+    Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
     Instance.new("UICorner", Frame)
 
     local Label = Instance.new("TextLabel", Frame)
-    Label.Size = UDim2.new(1, -55, 1, 0)
-    Label.Position = UDim2.new(0, 12, 0, 0)
+    Label.Size = UDim2.new(1, -50, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
     Label.Text = name
     Label.TextColor3 = Color3.fromRGB(255, 255, 255)
     Label.BackgroundTransparency = 1
     Label.TextXAlignment = "Left"
-    Label.Font = "Gotham"
 
     local Box = Instance.new("TextButton", Frame)
-    Box.Size = UDim2.new(0, 24, 0, 24)
-    Box.Position = UDim2.new(1, -35, 0.5, -12)
+    Box.Size = UDim2.new(0, 22, 0, 22)
+    Box.Position = UDim2.new(1, -30, 0.5, -11)
     Box.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     Box.Text = ""
-    Instance.new("UICorner", Box).CornerRadius = UDim.new(0, 4)
+    Instance.new("UICorner", Box)
 
     local state = false
     Box.MouseButton1Click:Connect(function()
@@ -111,76 +108,110 @@ local function AddToggle(parent, name, callback)
     end)
 end
 
--- [[ 5. 주요 기능 구현 ]] --
+-- [[ 4. 기능 로직 구현 ]] --
 
--- Gun Mod (FireRate 8x)
-local function ApplyGunMod(state)
-    if state then
-        task.spawn(function()
-            while state do
-                pcall(function()
-                    for _, v in pairs(game:GetService("Players").LocalPlayer.Character:GetChildren()) do
-                        if v:IsA("Tool") and v:FindFirstChild("Handle") then
-                            -- 일반적인 총기 스크립트 변수 수정 (게임마다 다를 수 있음)
-                            local gunScript = v:FindFirstChildOfClass("LocalScript")
-                            if gunScript then
-                                local env = getfenv(gunScript.source)
-                                if env.FireRate then env.FireRate = 8 end
-                            end
-                        end
-                    end
-                end)
-                task.wait(1)
+-- 타겟팅 함수
+local function GetClosestPlayer()
+    local target, dist = nil, math.huge
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
+            local pos, vis = Camera:WorldToViewportPoint(v.Character.Head.Position)
+            if vis then
+                local mDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                if mDist < dist then target = v; dist = mDist end
             end
-        end)
+        end
     end
+    return target
 end
 
--- Fly (Camera Direction)
+-- Silent Aim (Namecall Hook)
+local silentAimActive = false
+local gmt = getrawmetatable(game)
+setreadonly(gmt, false)
+local oldNc = gmt.__namecall
+gmt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    if silentAimActive and (method == "Raycast" or method == "FindPartOnRayWithIgnoreList") then
+        local t = GetClosestPlayer()
+        if t then
+            if method == "Raycast" then
+                args[2] = (t.Character.Head.Position - args[1]).Unit * 1000
+            end
+            return oldNc(self, unpack(args))
+        end
+    end
+    return oldNc(self, ...)
+end)
+
+-- Aimbot
+local aimbotActive = false
+RunService.RenderStepped:Connect(function()
+    if aimbotActive and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        local t = GetClosestPlayer()
+        if t then Camera.CFrame = CFrame.new(Camera.CFrame.Position, t.Character.Head.Position) end
+    end
+end)
+
+-- [[ Fly 수정본 (수직 이동 및 리스폰 완벽 대응) ]]
 local flying = false
+local flySpeed = 60
 local function ApplyFly()
-    if not flying then return end
     local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if root then
-        local bv = root:FindFirstChild("AxisFly") or Instance.new("BodyVelocity", root)
-        bv.Name = "AxisFly"
-        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-        task.spawn(function()
-            while flying and root do
-                local moveDir = Vector3.new(0,0,0)
-                if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
-                if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
-                bv.Velocity = moveDir * 60
-                task.wait()
+    if not char or not flying then return end
+    
+    local root = char:WaitForChild("HumanoidRootPart")
+    local hum = char:WaitForChild("Humanoid")
+    
+    -- 기존 비행체 제거
+    if root:FindFirstChild("AxisFly") then root.AxisFly:Destroy() end
+    
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "AxisFly"
+    bv.Parent = root
+    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    
+    task.spawn(function()
+        while flying and char and root.Parent do
+            local moveDir = Vector3.new(0,0,0)
+            -- 카메라 방향 기반 이동 (W/S는 상하 각도 포함, A/D는 좌우)
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
+            
+            -- 조이스틱/키 입력이 없을 때 미세 부양 (추락 방지)
+            if moveDir.Magnitude > 0 then
+                bv.Velocity = moveDir * flySpeed
+            else
+                bv.Velocity = Vector3.new(0, 0.1, 0)
             end
-            bv:Destroy()
-        end)
-    end
+            task.wait()
+        end
+        if bv then bv:Destroy() end
+    end)
 end
-LocalPlayer.CharacterAdded:Connect(function() task.wait(1); if flying then ApplyFly() end end)
 
--- [[ 6. 버튼 연결 ]] --
-
--- MAIN 탭
-AddToggle(main_pg, "Rage Bot (Key Needed)", function(s)
-    if s then loadstring(game:HttpGet("https://pastebin.com/raw/Fkt1pBTJ"))() end
-end)
-AddToggle(main_pg, "Gun Modpack (8x Speed)", ApplyGunMod)
-AddToggle(main_pg, "Silent Aim (Universal)", function(s) _G.SilentAim = s end)
-AddToggle(main_pg, "Emote Loop", function(s) 
-    if s then 
-        local a = Instance.new("Animation"); a.AnimationId = "rbxassetid://92281817840531"
-        local t = LocalPlayer.Character.Humanoid:LoadAnimation(a); t:Play(0.1, 1, 9999)
-    end 
+-- 라운드 변경/사망 시 자동 재연결
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1.5) -- 리스폰 안정화 대기
+    if flying then ApplyFly() end
 end)
 
--- ESP 탭
-AddToggle(esp_pg, "Highlight ESP", function(s)
+-- [[ 5. 버튼 연결 ]] --
+
+-- Combat
+AddToggle(combat_pg, "Silent Aim (Bullet)", function(s) silentAimActive = s end)
+AddToggle(combat_pg, "Aimbot (Right Click)", function(s) aimbotActive = s end)
+AddToggle(combat_pg, "Gun Mod (8x Speed)", function(s) 
+    if s then loadstring(game:HttpGet("https://raw.githubusercontent.com/gimjiyul346-art/AXIS-HUB/refs/heads/main/loader.luau"))() end
+end)
+
+-- Visuals
+AddToggle(visuals_pg, "Highlight ESP", function(s)
     if s then
-        _G.EL = RunService.Heartbeat:Connect(function()
+        _G.ESP_LOOP = RunService.Heartbeat:Connect(function()
             for _, p in pairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character and not p.Character:FindFirstChild("AxisESP") then
                     local h = Instance.new("Highlight", p.Character); h.Name = "AxisESP"
@@ -188,25 +219,24 @@ AddToggle(esp_pg, "Highlight ESP", function(s)
             end
         end)
     else
-        if _G.EL then _G.EL:Disconnect() end
+        if _G.ESP_LOOP then _G.ESP_LOOP:Disconnect() end
         for _, v in pairs(Players:GetPlayers()) do if v.Character and v.Character:FindFirstChild("AxisESP") then v.Character.AxisESP:Destroy() end end
     end
 end)
 
--- MISC 탭
-AddToggle(misc_pg, "Fly (Camera Dir)", function(s) flying = s; ApplyFly() end)
-AddToggle(misc_pg, "Infinite Jump", function(s)
-    _G.InfJ = UserInputService.JumpRequest:Connect(function()
-        if s then LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
-    end)
-end)
+-- Misc
+AddToggle(misc_pg, "Fixed Fly (Cam Dir)", function(s) flying = s; ApplyFly() end)
 AddToggle(misc_pg, "Noclip", function(s)
-    _G.Noc = RunService.Stepped:Connect(function()
+    _G.NOCLIP_LOOP = RunService.Stepped:Connect(function()
         if s and LocalPlayer.Character then
             for _, v in pairs(LocalPlayer.Character:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
         end
     end)
 end)
-AddToggle(misc_pg, "Skin Changer", function(s) if s then loadstring(game:HttpGet("https://raw.githubusercontent.com/QP-Offcial/Roblox/refs/heads/main/UnlockAll.lua"))() end end)
+AddToggle(misc_pg, "Infinite Jump", function(s)
+    _G.INF_JUMP = UserInputService.JumpRequest:Connect(function()
+        if s then LocalPlayer.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end)
+end)
 
-game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V3", Text = "Gun Mod & Ragebot Loaded", Duration = 5})
+game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V4.1", Text = "Fly & Combat Fixed", Duration = 5})
