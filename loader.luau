@@ -1,7 +1,6 @@
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -16,7 +15,7 @@ _G.Config = {
     Aimbot = false,
     AutoShoot = false,
     Wallbang = false,
-    AutoFarm = false, -- 신규 추가
+    AutoFarm = false, -- 머리 위 텔레포트
     WalkSpeed = 16,
     Fly = false,
     Noclip = false,
@@ -88,7 +87,6 @@ local visuals_pg = CreateTab("Visuals")
 local misc_pg = CreateTab("Misc")
 TabPages["Combat"].Visible = true
 
--- [ 4. 공용 컴포넌트 ]
 local function AddToggle(parent, name, var)
     local Frame = Instance.new("Frame", parent)
     Frame.Size = UDim2.new(1, 0, 0, 40)
@@ -106,7 +104,7 @@ local function AddToggle(parent, name, var)
     local Box = Instance.new("TextButton", Frame)
     Box.Size = UDim2.new(0, 22, 0, 22)
     Box.Position = UDim2.new(1, -30, 0.5, -11)
-    Box.BackgroundColor3 = _G.Config[var] and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(50, 50, 50)
+    Box.BackgroundColor3 = _G.Config[var] and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(40, 40, 40)
     Box.Text = ""
     Instance.new("UICorner", Box)
 
@@ -118,19 +116,23 @@ end
 
 -- [[ 5. 엔진 로직 ]] --
 
-local function GetClosestTarget()
-    local target, dist = nil, math.huge
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-
+local function GetCombatTarget()
+    local target, lowestHealth = nil, 100
     for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character.Humanoid.Health > 0 then
-            local pos, vis = Camera:WorldToViewportPoint(v.Character.HumanoidRootPart.Position)
-            if vis or _G.Config.AutoFarm or _G.Config.Wallbang then
-                local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                if mDist < dist then
-                    target = v
-                    dist = mDist
-                end
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Humanoid") then
+            local hp = v.Character.Humanoid.Health
+            if hp > 0 and hp < lowestHealth then -- 싸우는 중인 적 우선
+                target = v
+                lowestHealth = hp
+            end
+        end
+    end
+    if not target then
+        local dist = math.huge
+        for _, v in pairs(Players:GetPlayers()) do
+            if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+                local d = (v.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if d < dist then target = v; dist = d end
             end
         end
     end
@@ -141,63 +143,35 @@ RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     
-    local target = GetClosestTarget()
+    local target = GetCombatTarget()
 
-    -- Auto Farm 로직 (대상 바로 밑 텔포)
-    if _G.Config.AutoFarm and target then
-        char.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, -3.5, 0)
-        -- 텔포 중 벽 끼임 방지 (Noclip 강제)
+    -- Auto Farm (Top TP)
+    if _G.Config.AutoFarm and target and target.Character:FindFirstChild("HumanoidRootPart") then
+        -- 상대방의 머리 위(+4.5 스터드)로 좌표 설정
+        char.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 4.5, 0)
+        
+        -- Noclip 적용하여 몸이 끼지 않게 함
         for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
     end
 
-    -- 에임봇 & 오토슛 (모바일 방식)
-    if _G.Config.Aimbot and not _G.Config.AutoFarm then
-        if target and target.Character:FindFirstChild("Head") then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
-        end
+    -- 모바일 에임봇 및 오토슛
+    if _G.Config.Aimbot and not _G.Config.AutoFarm and target then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.HumanoidRootPart.Position)
     end
-
+    
     if _G.Config.AutoShoot and target then
         local tool = char:FindFirstChildOfClass("Tool")
         if tool then tool:Activate() end
     end
-
-    -- 이동 관련
-    if _G.Config.WalkSpeed > 16 and char.Humanoid.MoveDirection.Magnitude > 0 then
-        char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame + (char.Humanoid.MoveDirection * (_G.Config.WalkSpeed / 300))
-    end
-    if _G.Config.Fly then char.HumanoidRootPart.Velocity = Vector3.new(0, 3, 0) end
 end)
 
 -- [[ 6. 버튼 연결 ]] --
-
--- Combat (Main)
 AddToggle(combat_pg, "Mobile Aimbot", "Aimbot")
 AddToggle(combat_pg, "Mobile Auto Shoot", "AutoShoot")
-AddToggle(combat_pg, "Auto Farm (TP Under)", "AutoFarm") -- 추가됨
+AddToggle(combat_pg, "Top Auto Farm (Safe)", "AutoFarm") -- 머리 위 텔포
 AddToggle(combat_pg, "Wallbang", "Wallbang")
 
--- Visuals
 AddToggle(visuals_pg, "Highlight ESP", "ESP")
-RunService.Heartbeat:Connect(function()
-    if _G.Config.ESP then
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and not p.Character:FindFirstChild("AxisESP") then
-                local h = Instance.new("Highlight", p.Character); h.Name = "AxisESP"
-            end
-        end
-    end
-end)
-
--- Misc
-local SpeedBtn = Instance.new("TextButton", misc_pg)
-SpeedBtn.Size = UDim2.new(1, 0, 0, 40); SpeedBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35); SpeedBtn.Text = "WalkSpeed: ".._G.Config.WalkSpeed; SpeedBtn.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", SpeedBtn)
-SpeedBtn.MouseButton1Click:Connect(function()
-    _G.Config.WalkSpeed = (_G.Config.WalkSpeed >= 200) and 16 or _G.Config.WalkSpeed + 20
-    SpeedBtn.Text = "WalkSpeed: ".._G.Config.WalkSpeed
-end)
-
-AddToggle(misc_pg, "Fly Mode", "Fly")
 AddToggle(misc_pg, "Noclip", "Noclip")
 
-game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V8.1", Text = "Auto Farm Added to Main", Duration = 5})
+game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V8.5", Text = "머리 위 텔레포트 적용 완료", Duration = 5})
