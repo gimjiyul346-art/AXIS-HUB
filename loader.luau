@@ -4,7 +4,6 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 local Camera = workspace.CurrentCamera
 
 -- [[ UI 초기화 ]]
@@ -17,6 +16,7 @@ ScreenGui.Name = "AXIS_HUB"
 _G.Config = {
     Aimbot = false,
     AutoShoot = false,
+    Wallbang = false, -- 신규 추가
     WalkSpeed = 16,
     Fly = false,
     Noclip = false,
@@ -39,8 +39,8 @@ Instance.new("UICorner", MenuBtn).CornerRadius = UDim.new(1, 0)
 -- [ 2. 메인 프레임 ]
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainFrame.Size = UDim2.new(0, 480, 0, 380)
-MainFrame.Position = UDim2.new(0.5, -240, 0.5, -190)
+MainFrame.Size = UDim2.new(0, 480, 0, 400) -- Wallbang 추가로 높이 조절
+MainFrame.Position = UDim2.new(0.5, -240, 0.5, -200)
 MainFrame.Visible = true
 MainFrame.Active = true
 MainFrame.Draggable = true
@@ -88,7 +88,7 @@ local visuals_pg = CreateTab("Visuals")
 local misc_pg = CreateTab("Misc")
 TabPages["Combat"].Visible = true
 
--- [ 4. 공용 컴포넌트 (토글 & 슬라이더) ]
+-- [ 4. 공용 컴포넌트 ]
 local function AddToggle(parent, name, var)
     local Frame = Instance.new("Frame", parent)
     Frame.Size = UDim2.new(1, 0, 0, 40)
@@ -117,8 +117,7 @@ local function AddToggle(parent, name, var)
 end
 
 local function AddSlider(parent, text, min, max, var)
-    local f = Instance.new("Frame", parent); f.Size = UDim2.new(1, 0, 0, 50); f.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-    Instance.new("UICorner", f)
+    local f = Instance.new("Frame", parent); f.Size = UDim2.new(1, 0, 0, 50); f.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Instance.new("UICorner", f)
     local l = Instance.new("TextLabel", f); l.Size = UDim2.new(1, -20, 0, 25); l.Position = UDim2.new(0, 10, 0, 5); l.Text = text .. ": " .. _G.Config[var]; l.TextColor3 = Color3.new(1,1,1); l.BackgroundTransparency = 1; l.TextXAlignment = "Left"
     local b = Instance.new("TextButton", f); b.Size = UDim2.new(1, -20, 0, 6); b.Position = UDim2.new(0, 10, 0.7, 0); b.BackgroundColor3 = Color3.fromRGB(50, 50, 50); b.Text = ""; Instance.new("UICorner", b)
     local fill = Instance.new("Frame", b); fill.Size = UDim2.new((_G.Config[var]-min)/(max-min), 0, 1, 0); fill.BackgroundColor3 = Color3.fromRGB(0, 150, 255); fill.BorderSizePixel = 0; Instance.new("UICorner", fill)
@@ -133,13 +132,13 @@ local function AddSlider(parent, text, min, max, var)
     end)
 end
 
--- [[ 5. 핵심 엔진 (Aimbot & Movement) ]] --
+-- [[ 5. 핵심 엔진 (Aimbot & Wallbang) ]] --
 local function GetClosest()
     local t, d = nil, math.huge
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
             local pos, vis = Camera:WorldToViewportPoint(p.Character.Head.Position)
-            if vis then
+            if vis or _G.Config.Wallbang then -- Wallbang 활성 시 시야 밖 타겟 허용
                 local m = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
                 if m < d then t = p; d = m end
             end
@@ -148,36 +147,43 @@ local function GetClosest()
     return t
 end
 
+-- Wallbang (Raycast Hook)
+local gmt = getrawmetatable(game)
+local oldNc = gmt.__namecall
+setreadonly(gmt, false)
+gmt.__namecall = newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    if _G.Config.Wallbang and (method == "FindPartOnRayWithIgnoreList" or method == "Raycast") then
+        local t = GetClosest()
+        if t then
+            if method == "Raycast" then args[2] = (t.Character.Head.Position - args[1]).Unit * 1000 end
+            return oldNc(self, unpack(args))
+        end
+    end
+    return oldNc(self, ...)
+end)
+
 RunService.RenderStepped:Connect(function()
-    -- Aimbot 엔진 (Nameless 기반)
     if _G.Config.Aimbot then
         local target = GetClosest()
         if target and target.Character:FindFirstChild("Head") then
-            local headPos = target.Character.Head.Position
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, headPos)
-            
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
             if _G.Config.AutoShoot then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(headPos)
-                if onScreen then
-                    VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
-                    task.wait()
-                    VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
-                end
+                local screenPos = Camera:WorldToViewportPoint(target.Character.Head.Position)
+                VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
+                task.wait()
+                VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
             end
         end
     end
 
-    -- Movement 엔진
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         if _G.Config.WalkSpeed > 16 and char.Humanoid.MoveDirection.Magnitude > 0 then
             char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame + (char.Humanoid.MoveDirection * (_G.Config.WalkSpeed / 250))
         end
-        if _G.Config.Fly then 
-            char.HumanoidRootPart.Velocity = Vector3.new(0, 2, 0) -- 기본 부양
-            if UserInputService:IsKeyDown(Enum.KeyCode.W) then char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0,0,-1) end
-            if UserInputService:IsKeyDown(Enum.KeyCode.S) then char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(0,0,1) end
-        end
+        if _G.Config.Fly then char.HumanoidRootPart.Velocity = Vector3.new(0, 2, 0) end
         if _G.Config.Noclip then
             for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
         end
@@ -189,7 +195,7 @@ end)
 -- Combat
 AddToggle(combat_pg, "Aimbot (1st Person Lock)", "Aimbot")
 AddToggle(combat_pg, "Auto Shoot", "AutoShoot")
-AddToggle(combat_pg, "Gun Mod (8x Speed)", "GunMod") -- 기존 로더 연결용 변수
+AddToggle(combat_pg, "Wallbang (Shoot through Walls)", "Wallbang") -- 신규 추가
 
 -- Visuals
 AddToggle(visuals_pg, "Highlight ESP", "ESP")
@@ -207,13 +213,9 @@ end)
 AddSlider(misc_pg, "Walk Speed", 16, 500, "WalkSpeed")
 AddToggle(misc_pg, "Fly Mode", "Fly")
 AddToggle(misc_pg, "Noclip", "Noclip")
-
--- Skin Changer 버튼 (클릭 시 실행)
 local SkinBtn = Instance.new("TextButton", misc_pg)
 SkinBtn.Size = UDim2.new(1, 0, 0, 40); SkinBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255); SkinBtn.Text = "Skin Changer (Execute)"
 SkinBtn.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", SkinBtn)
-SkinBtn.MouseButton1Click:Connect(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/QP-Offcial/Roblox/refs/heads/main/UnlockAll.lua"))()
-end)
+SkinBtn.MouseButton1Click:Connect(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/QP-Offcial/Roblox/refs/heads/main/UnlockAll.lua"))() end)
 
-game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V6", Text = "Aimbot & Slider Updated", Duration = 5})
+game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V7", Text = "Wallbang Integrated", Duration = 5})
