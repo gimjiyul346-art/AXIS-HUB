@@ -114,7 +114,9 @@ local function AddToggle(parent, name, func)
     end)
 end
 
--- [ MAIN 탭 기능: Soluna Script 연결 ]
+-- [ MAIN 탭 기능 리스트 ]
+
+-- 1. Soluna Silent Aim
 AddToggle(TabPages["main"], "Soluna Silent Aim", function(state)
     if state then
         task.spawn(function()
@@ -123,17 +125,26 @@ AddToggle(TabPages["main"], "Soluna Silent Aim", function(state)
     end
 end)
 
-AddToggle(TabPages["main"], "Aimbot (Active)", function(state)
+-- 2. Soluna Aimbot
+AddToggle(TabPages["main"], "Soluna Aimbot", function(state)
     if state then
-        -- 에임봇 실행 로직 (Soluna Script 내부에 포함되어 있을 수 있으므로 동일하게 로드)
         task.spawn(function()
             loadstring(game:HttpGet("https://soluna-script.vercel.app/main.lua", true))()
         end)
     end
 end)
 
+-- 3. Unlock All Skins (올스킨핵)
+AddToggle(TabPages["main"], "Unlock All Skins", function(state)
+    if state then
+        task.spawn(function()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/QP-Offcial/Roblox/refs/heads/main/UnlockAll.lua", true))()
+        end)
+    end
+end)
+
 game:GetService("StarterGui"):SetCore("SendNotification", {
     Title = "AXIS HUB V1",
-    Text = "Soluna Integrated. Ready.",
+    Text = "All Scripts Integrated.",
     Duration = 3
 })
