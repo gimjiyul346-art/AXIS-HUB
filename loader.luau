@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -16,7 +15,7 @@ ScreenGui.Name = "AXIS_HUB"
 _G.Config = {
     Aimbot = false,
     AutoShoot = false,
-    Wallbang = false, -- 신규 추가
+    Wallbang = false,
     WalkSpeed = 16,
     Fly = false,
     Noclip = false,
@@ -39,7 +38,7 @@ Instance.new("UICorner", MenuBtn).CornerRadius = UDim.new(1, 0)
 -- [ 2. 메인 프레임 ]
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainFrame.Size = UDim2.new(0, 480, 0, 400) -- Wallbang 추가로 높이 조절
+MainFrame.Size = UDim2.new(0, 480, 0, 400)
 MainFrame.Position = UDim2.new(0.5, -240, 0.5, -200)
 MainFrame.Visible = true
 MainFrame.Active = true
@@ -116,90 +115,71 @@ local function AddToggle(parent, name, var)
     end)
 end
 
-local function AddSlider(parent, text, min, max, var)
-    local f = Instance.new("Frame", parent); f.Size = UDim2.new(1, 0, 0, 50); f.BackgroundColor3 = Color3.fromRGB(25, 25, 25); Instance.new("UICorner", f)
-    local l = Instance.new("TextLabel", f); l.Size = UDim2.new(1, -20, 0, 25); l.Position = UDim2.new(0, 10, 0, 5); l.Text = text .. ": " .. _G.Config[var]; l.TextColor3 = Color3.new(1,1,1); l.BackgroundTransparency = 1; l.TextXAlignment = "Left"
-    local b = Instance.new("TextButton", f); b.Size = UDim2.new(1, -20, 0, 6); b.Position = UDim2.new(0, 10, 0.7, 0); b.BackgroundColor3 = Color3.fromRGB(50, 50, 50); b.Text = ""; Instance.new("UICorner", b)
-    local fill = Instance.new("Frame", b); fill.Size = UDim2.new((_G.Config[var]-min)/(max-min), 0, 1, 0); fill.BackgroundColor3 = Color3.fromRGB(0, 150, 255); fill.BorderSizePixel = 0; Instance.new("UICorner", fill)
-    
-    b.MouseButton1Down:Connect(function()
-        local move; move = RunService.RenderStepped:Connect(function()
-            local p = math.clamp((UserInputService:GetMouseLocation().X - b.AbsolutePosition.X) / b.AbsoluteSize.X, 0, 1)
-            fill.Size = UDim2.new(p, 0, 1, 0); local val = math.floor(min + (max - min) * p)
-            l.Text = text .. ": " .. val; _G.Config[var] = val
-            if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then move:Disconnect() end
-        end)
-    end)
-end
+-- [[ 5. 모바일 전용 엔진 (Mobile Optimized) ]] --
 
--- [[ 5. 핵심 엔진 (Aimbot & Wallbang) ]] --
-local function GetClosest()
-    local t, d = nil, math.huge
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("Head") then
-            local pos, vis = Camera:WorldToViewportPoint(p.Character.Head.Position)
-            if vis or _G.Config.Wallbang then -- Wallbang 활성 시 시야 밖 타겟 허용
-                local m = (Vector2.new(pos.X, pos.Y) - UserInputService:GetMouseLocation()).Magnitude
-                if m < d then t = p; d = m end
+-- 화면 중앙에서 가장 가까운 적 찾기
+local function GetClosestToCenter()
+    local target, dist = nil, math.huge
+    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") then
+            local pos, vis = Camera:WorldToViewportPoint(v.Character.Head.Position)
+            if vis or _G.Config.Wallbang then
+                local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                if mDist < dist then
+                    target = v
+                    dist = mDist
+                end
             end
         end
     end
-    return t
+    return target
 end
 
--- Wallbang (Raycast Hook)
-local gmt = getrawmetatable(game)
-local oldNc = gmt.__namecall
-setreadonly(gmt, false)
-gmt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    if _G.Config.Wallbang and (method == "FindPartOnRayWithIgnoreList" or method == "Raycast") then
-        local t = GetClosest()
-        if t then
-            if method == "Raycast" then args[2] = (t.Character.Head.Position - args[1]).Unit * 1000 end
-            return oldNc(self, unpack(args))
-        end
+-- 오토 슛 실행 함수 (모바일용 가상 클릭 대신 서버 신호 모방)
+local function FastShoot()
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if tool then
+        tool:Activate() -- 대부분의 모바일 환경에서 가장 안정적인 발사 신호
     end
-    return oldNc(self, ...)
-end)
+end
 
 RunService.RenderStepped:Connect(function()
+    -- 모바일 에임봇: 조이스틱 조작 중에도 적의 머리를 부드럽게 추격
     if _G.Config.Aimbot then
-        local target = GetClosest()
-        if target and target.Character:FindFirstChild("Head") then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.Head.Position)
+        local t = GetClosestToCenter()
+        if t and t.Character:FindFirstChild("Head") then
+            local targetPos = t.Character.Head.Position
+            -- CFrame을 사용해 카메라 방향을 적에게 직접 고정
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, targetPos)
+            
             if _G.Config.AutoShoot then
-                local screenPos = Camera:WorldToViewportPoint(target.Character.Head.Position)
-                VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
-                task.wait()
-                VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
+                FastShoot()
             end
         end
     end
 
+    -- 이동 관련 (모바일 슬라이더 속도 적용)
     local char = LocalPlayer.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
         if _G.Config.WalkSpeed > 16 and char.Humanoid.MoveDirection.Magnitude > 0 then
-            char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame + (char.Humanoid.MoveDirection * (_G.Config.WalkSpeed / 250))
+            char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame + (char.Humanoid.MoveDirection * (_G.Config.WalkSpeed / 300))
         end
-        if _G.Config.Fly then char.HumanoidRootPart.Velocity = Vector3.new(0, 2, 0) end
-        if _G.Config.Noclip then
-            for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
-        end
+        if _G.Config.Fly then char.HumanoidRootPart.Velocity = Vector3.new(0, 3, 0) end
     end
 end)
 
 -- [[ 6. 버튼 연결 ]] --
 
 -- Combat
-AddToggle(combat_pg, "Aimbot (1st Person Lock)", "Aimbot")
-AddToggle(combat_pg, "Auto Shoot", "AutoShoot")
-AddToggle(combat_pg, "Wallbang (Shoot through Walls)", "Wallbang") -- 신규 추가
+AddToggle(combat_pg, "Mobile Aimbot (Center Lock)", "Aimbot")
+AddToggle(combat_pg, "Mobile Auto Shoot", "AutoShoot")
+AddToggle(combat_pg, "Wallbang", "Wallbang")
 
 -- Visuals
 AddToggle(visuals_pg, "Highlight ESP", "ESP")
-RunService.RenderStepped:Connect(function()
+RunService.Heartbeat:Connect(function()
     if _G.Config.ESP then
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character and not p.Character:FindFirstChild("AxisESP") then
@@ -210,12 +190,15 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- Misc
-AddSlider(misc_pg, "Walk Speed", 16, 500, "WalkSpeed")
+-- 모바일에서 쓰기 편한 버튼식 속도 증가 (슬라이더 대신 10단위 증가)
+local SpeedBtn = Instance.new("TextButton", misc_pg)
+SpeedBtn.Size = UDim2.new(1, 0, 0, 40); SpeedBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 35); SpeedBtn.Text = "WalkSpeed: ".._G.Config.WalkSpeed; SpeedBtn.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", SpeedBtn)
+SpeedBtn.MouseButton1Click:Connect(function()
+    _G.Config.WalkSpeed = (_G.Config.WalkSpeed >= 200) and 16 or _G.Config.WalkSpeed + 20
+    SpeedBtn.Text = "WalkSpeed: ".._G.Config.WalkSpeed
+end)
+
 AddToggle(misc_pg, "Fly Mode", "Fly")
 AddToggle(misc_pg, "Noclip", "Noclip")
-local SkinBtn = Instance.new("TextButton", misc_pg)
-SkinBtn.Size = UDim2.new(1, 0, 0, 40); SkinBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 255); SkinBtn.Text = "Skin Changer (Execute)"
-SkinBtn.TextColor3 = Color3.new(1,1,1); Instance.new("UICorner", SkinBtn)
-SkinBtn.MouseButton1Click:Connect(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/QP-Offcial/Roblox/refs/heads/main/UnlockAll.lua"))() end)
 
-game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V7", Text = "Wallbang Integrated", Duration = 5})
+game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB V8", Text = "Mobile Optimized Engines Loaded", Duration = 5})
