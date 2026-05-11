@@ -1,39 +1,6 @@
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
-
-_G.SilentAimEnabled = false
-_G.TeamCheck = true
-_G.RapidFire = false
-
-local function GetClosestPlayer()
-    local ClosestPlayer = nil
-    local ShortestDistance = math.huge
-    for _, v in pairs(Players:GetPlayers()) do
-        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("Head") and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
-            if _G.TeamCheck and v.Team == LocalPlayer.Team then continue end
-            local Distance = (v.Character.Head.Position - LocalPlayer.Character.Head.Position).Magnitude
-            if Distance < ShortestDistance then
-                ClosestPlayer = v
-                ShortestDistance = Distance
-            end
-        end
-    end
-    return ClosestPlayer
-end
-
-local OldIndex = nil
-OldIndex = hookmetamethod(game, "__index", function(Self, Index)
-    if Self == Mouse and (Index == "Hit" or Index == "Target") and _G.SilentAimEnabled then
-        local Target = GetClosestPlayer()
-        if Target and Target.Character and Target.Character:FindFirstChild("Head") then
-            return (Index == "Hit" and Target.Character.Head.CFrame or Target.Character.Head)
-        end
-    end
-    return OldIndex(Self, Index)
-end)
 
 if CoreGui:FindFirstChild("AXIS_HUB") then CoreGui.AXIS_HUB:Destroy() end
 
@@ -46,9 +13,7 @@ MainFrame.Size = UDim2.new(0, 600, 0, 420)
 MainFrame.Position = UDim2.new(0.5, -300, 0.5, -210)
 MainFrame.Active = true
 MainFrame.Draggable = true
-
-local UICorner = Instance.new("UICorner", MainFrame)
-UICorner.CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 6)
 
 local TitleBar = Instance.new("TextLabel", MainFrame)
 TitleBar.Size = UDim2.new(1, 0, 0, 40)
@@ -63,38 +28,34 @@ local TabBar = Instance.new("Frame", MainFrame)
 TabBar.Position = UDim2.new(0, 0, 0, 40)
 TabBar.Size = UDim2.new(1, 0, 0, 35)
 TabBar.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+local TabListLayout = Instance.new("UIListLayout", TabBar)
+TabListLayout.FillDirection = "Horizontal"
+TabListLayout.HorizontalAlignment = "Center"
 
-local TabList = Instance.new("UIListLayout", TabBar)
-TabList.FillDirection = "Horizontal"
-TabList.HorizontalAlignment = "Center"
+local Pages = Instance.new("Frame", MainFrame)
+Pages.Position = UDim2.new(0, 15, 0, 85)
+Pages.Size = UDim2.new(1, -30, 1, -100)
+Pages.BackgroundTransparency = 1
 
-local ContentFrame = Instance.new("ScrollingFrame", MainFrame)
-ContentFrame.Position = UDim2.new(0, 15, 0, 85)
-ContentFrame.Size = UDim2.new(1, -30, 1, -100)
-ContentFrame.BackgroundTransparency = 1
-ContentFrame.ScrollBarThickness = 2
+local TabPages = {}
 
-local UIList = Instance.new("UIListLayout", ContentFrame)
-UIList.Padding = UDim.new(0, 8)
+local function CreatePage(name)
+    local Page = Instance.new("ScrollingFrame", Pages)
+    Page.Name = name .. "Page"
+    Page.Size = UDim2.new(1, 0, 1, 0)
+    Page.BackgroundTransparency = 1
+    Page.Visible = false
+    Page.ScrollBarThickness = 0
+    local PageLayout = Instance.new("UIListLayout", Page)
+    PageLayout.Padding = UDim.new(0, 8)
+    TabPages[name] = Page
+    return Page
+end
 
-local function AddToggle(name, callback)
-    local btn = Instance.new("TextButton", ContentFrame)
-    btn.Size = UDim2.new(1, 0, 0, 45)
-    btn.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
-    btn.Text = "  " .. name .. " [OFF]"
-    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    btn.TextXAlignment = "Left"
-    btn.Font = "Gotham"
-    btn.TextSize = 14
-    
-    local enabled = false
-    btn.MouseButton1Click:Connect(function()
-        enabled = not enabled
-        btn.Text = "  " .. name .. (enabled and " [ON]" or " [OFF]")
-        btn.TextColor3 = enabled and Color3.fromRGB(0, 180, 255) or Color3.fromRGB(200, 200, 200)
-        callback(enabled)
-    end)
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+local function ShowPage(name)
+    for n, p in pairs(TabPages) do
+        p.Visible = (n == name)
+    end
 end
 
 local tabs = {"main", "world", "esp", "visuals", "character", "misc", "settings"}
@@ -103,26 +64,70 @@ for i, t in pairs(tabs) do
     tabBtn.Size = UDim2.new(0, 80, 1, 0)
     tabBtn.BackgroundTransparency = 1
     tabBtn.Text = t:upper()
-    tabBtn.TextColor3 = (i == 1 and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(120, 120, 120))
+    tabBtn.TextColor3 = Color3.fromRGB(120, 120, 120)
     tabBtn.Font = "GothamBold"
     tabBtn.TextSize = 12
+    
+    local page = CreatePage(t)
+    tabBtn.MouseButton1Click:Connect(function()
+        ShowPage(t)
+        for _, b in pairs(TabBar:GetChildren()) do
+            if b:IsA("TextButton") then b.TextColor3 = Color3.fromRGB(120, 120, 120) end
+        end
+        tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end)
+    if i == 1 then tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255); page.Visible = true end
 end
 
-AddToggle("Silent Aim (Target Head)", function(state)
-    _G.SilentAimEnabled = state
+local function AddToggle(parent, name, func)
+    local ToggleFrame = Instance.new("Frame", parent)
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 45)
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    Instance.new("UICorner", ToggleFrame).CornerRadius = UDim.new(0, 4)
+
+    local TextLabel = Instance.new("TextLabel", ToggleFrame)
+    TextLabel.Text = "  " .. name
+    TextLabel.Size = UDim2.new(1, -50, 1, 0)
+    TextLabel.BackgroundTransparency = 1
+    TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextLabel.TextXAlignment = "Left"
+    TextLabel.Font = "Gotham"
+    TextLabel.TextSize = 14
+
+    local Checkbox = Instance.new("TextButton", ToggleFrame)
+    Checkbox.Size = UDim2.new(0, 25, 0, 25)
+    Checkbox.Position = UDim2.new(1, -35, 0.5, -12)
+    Checkbox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    Checkbox.Text = ""
+    local CheckboxCorner = Instance.new("UICorner", Checkbox)
+    CheckboxCorner.CornerRadius = UDim.new(0, 4)
+
+    local isToggled = false
+    Checkbox.MouseButton1Click:Connect(function()
+        isToggled = not isToggled
+        if isToggled then
+            TweenService:Create(Checkbox, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 255, 50)}):Play()
+            func(true)
+        else
+            TweenService:Create(Checkbox, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
+            func(false)
+        end
+    end)
+end
+
+AddToggle(TabPages["main"], "Silent Aim", function(state)
+    if state then
+        loadstring(game:HttpGet(("https://raw.githubusercontent.com/ZIVC4S/atlantas-script/refs/heads/main/Script"), true))()
+    end
 end)
 
-AddToggle("Team Check", function(state)
-    _G.TeamCheck = state
-end)
-
-AddToggle("Wallbang (Raycast Bypass)", function(state)
-    print("Wallbang state: ", state)
-end)
-
-AddToggle("Rapid Fire (Instant)", function(state)
-    _G.RapidFire = state
-end)
+local SettingsInfo = Instance.new("TextLabel", TabPages["settings"])
+SettingsInfo.Size = UDim2.new(1, 0, 0, 100)
+SettingsInfo.BackgroundTransparency = 1
+SettingsInfo.Text = "AXIS HUB Settings\n\nVersion: 1.0\nStatus: Active"
+SettingsInfo.TextColor3 = Color3.fromRGB(150, 150, 150)
+SettingsInfo.Font = "Gotham"
+SettingsInfo.TextSize = 14
 
 game:GetService("StarterGui"):SetCore("SendNotification", {
     Title = "AXIS HUB V1",
