@@ -79,45 +79,61 @@ for i, t in pairs(tabs) do
     if i == 1 then tabBtn.TextColor3 = Color3.fromRGB(255, 255, 255); page.Visible = true end
 end
 
-local ToggleFrame = Instance.new("Frame", TabPages["main"])
-ToggleFrame.Size = UDim2.new(1, 0, 0, 45)
-ToggleFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
-Instance.new("UICorner", ToggleFrame).CornerRadius = UDim.new(0, 4)
+local function AddToggle(parent, name, func)
+    local ToggleFrame = Instance.new("Frame", parent)
+    ToggleFrame.Size = UDim2.new(1, 0, 0, 45)
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+    Instance.new("UICorner", ToggleFrame).CornerRadius = UDim.new(0, 4)
 
-local TextLabel = Instance.new("TextLabel", ToggleFrame)
-TextLabel.Text = "  Silent Aim"
-TextLabel.Size = UDim2.new(1, -50, 1, 0)
-TextLabel.BackgroundTransparency = 1
-TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TextLabel.TextXAlignment = "Left"
-TextLabel.Font = "Gotham"
-TextLabel.TextSize = 14
+    local TextLabel = Instance.new("TextLabel", ToggleFrame)
+    TextLabel.Text = "  " .. name
+    TextLabel.Size = UDim2.new(1, -50, 1, 0)
+    TextLabel.BackgroundTransparency = 1
+    TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TextLabel.TextXAlignment = "Left"
+    TextLabel.Font = "Gotham"
+    TextLabel.TextSize = 14
 
-local Checkbox = Instance.new("TextButton", ToggleFrame)
-Checkbox.Size = UDim2.new(0, 25, 0, 25)
-Checkbox.Position = UDim2.new(1, -35, 0.5, -12)
-Checkbox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-Checkbox.Text = ""
-Instance.new("UICorner", Checkbox).CornerRadius = UDim.new(0, 4)
+    local Checkbox = Instance.new("TextButton", ToggleFrame)
+    Checkbox.Size = UDim2.new(0, 25, 0, 25)
+    Checkbox.Position = UDim2.new(1, -35, 0.5, -12)
+    Checkbox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    Checkbox.Text = ""
+    Instance.new("UICorner", Checkbox).CornerRadius = UDim.new(0, 4)
 
-local isExecuted = false
-Checkbox.MouseButton1Click:Connect(function()
-    if not isExecuted then
-        isExecuted = true
-        Checkbox.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+    local isToggled = false
+    Checkbox.MouseButton1Click:Connect(function()
+        isToggled = not isToggled
+        if isToggled then
+            TweenService:Create(Checkbox, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 255, 50)}):Play()
+            func(true)
+        else
+            TweenService:Create(Checkbox, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play()
+            func(false)
+        end
+    end)
+end
+
+-- [ MAIN 탭 기능: Soluna Script 연결 ]
+AddToggle(TabPages["main"], "Soluna Silent Aim", function(state)
+    if state then
         task.spawn(function()
-            loadstring(game:HttpGet(("https://raw.githubusercontent.com/ZIVC4S/atlantas-script/refs/heads/main/Script"), true))()
+            loadstring(game:HttpGet("https://soluna-script.vercel.app/main.lua", true))()
         end)
-    else
-        -- 이미 실행된 스크립트 내부에서 끄는 기능은 외부 스크립트가 지원해야 가능합니다.
-        -- 여기서는 UI 상태만 표시합니다.
-        isExecuted = false
-        Checkbox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    end
+end)
+
+AddToggle(TabPages["main"], "Aimbot (Active)", function(state)
+    if state then
+        -- 에임봇 실행 로직 (Soluna Script 내부에 포함되어 있을 수 있으므로 동일하게 로드)
+        task.spawn(function()
+            loadstring(game:HttpGet("https://soluna-script.vercel.app/main.lua", true))()
+        end)
     end
 end)
 
 game:GetService("StarterGui"):SetCore("SendNotification", {
     Title = "AXIS HUB V1",
-    Text = "Loaded. Settings tab functional.",
+    Text = "Soluna Integrated. Ready.",
     Duration = 3
 })
