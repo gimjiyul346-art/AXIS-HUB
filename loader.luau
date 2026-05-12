@@ -5,14 +5,14 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- [[ 확실한 초기화 ]]
+-- [[ UI 초기화 및 잔상 제거 ]]
 for _, v in pairs(CoreGui:GetChildren()) do
     if v.Name == "AXIS_HUB" or v.Name == "AXIS_MENU_BTN" then v:Destroy() end
 end
 
 local ScreenGui = Instance.new("ScreenGui", CoreGui)
 ScreenGui.Name = "AXIS_HUB"
-ScreenGui.DisplayOrder = 999 -- 다른 UI보다 위에 표시
+ScreenGui.DisplayOrder = 999
 
 _G.Config = {
     Aimbot = false,
@@ -25,74 +25,81 @@ _G.Config = {
     InfJump = false
 }
 
--- [[ 1. MENU 버튼 복구 (최상단 고정) ]]
+-- [[ 1. MENU 버튼 및 토글 시스템 ]]
 local MenuBtn = Instance.new("TextButton", CoreGui)
 MenuBtn.Name = "AXIS_MENU_BTN"
-MenuBtn.Size = UDim2.new(0, 55, 0, 55)
-MenuBtn.Position = UDim2.new(0, 15, 0.5, -27)
-MenuBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+MenuBtn.Size = UDim2.new(0, 50, 0, 50)
+MenuBtn.Position = UDim2.new(0, 15, 0.5, -25)
+MenuBtn.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 MenuBtn.Text = "AXIS"
 MenuBtn.TextColor3 = Color3.fromRGB(0, 150, 255)
 MenuBtn.Font = Enum.Font.GothamBold
-MenuBtn.TextSize = 14
-MenuBtn.ZIndex = 1000 -- 가장 위에 표시되도록 설정
-
-local MenuStroke = Instance.new("UIStroke", MenuBtn)
-MenuStroke.Color = Color3.fromRGB(0, 150, 255)
-MenuStroke.Thickness = 2
+MenuBtn.TextSize = 12
+MenuBtn.ZIndex = 1000
 Instance.new("UICorner", MenuBtn).CornerRadius = UDim.new(1, 0)
+local BtnStroke = Instance.new("UIStroke", MenuBtn)
+BtnStroke.Color = Color3.fromRGB(0, 150, 255)
+BtnStroke.Thickness = 2
 
--- [[ 2. 메인 UI 구조 ]]
 local MainFrame = Instance.new("Frame", ScreenGui)
-MainFrame.Size = UDim2.new(0, 420, 0, 320)
-MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
-MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-MainFrame.BorderSizePixel = 0
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 420, 0, 350)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -175)
+MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 MainFrame.Visible = true
 MainFrame.Active = true
 MainFrame.Draggable = true
 Instance.new("UICorner", MainFrame)
-Instance.new("UIStroke", MainFrame).Color = Color3.fromRGB(50, 50, 50)
+Instance.new("UIStroke", MainFrame).Color = Color3.fromRGB(40, 40, 40)
 
-MenuBtn.MouseButton1Click:Connect(function()
+-- [ 토글 함수: 버튼 클릭 및 LeftShift 키 ]
+local function ToggleUI()
     MainFrame.Visible = not MainFrame.Visible
+end
+
+MenuBtn.MouseButton1Click:Connect(ToggleUI)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode == Enum.KeyCode.LeftShift then
+        ToggleUI()
+    end
 end)
 
--- 탭 버튼 생성 함수
-local TabContainer = Instance.new("Frame", MainFrame)
-TabContainer.Size = UDim2.new(1, 0, 0, 40)
-TabContainer.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-local TabList = Instance.new("UIListLayout", TabContainer)
-TabList.FillDirection = "Horizontal"
+-- [[ 2. 탭 및 섹션 레이아웃 ]]
+local TabFrame = Instance.new("Frame", MainFrame)
+TabFrame.Size = UDim2.new(1, 0, 0, 40)
+TabFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+local TabList = Instance.new("UIListLayout", TabFrame)
+TabList.FillDirection = Enum.FillDirection.Horizontal
 
-local PageContainer = Instance.new("Frame", MainFrame)
-PageContainer.Size = UDim2.new(1, -20, 1, -50)
-PageContainer.Position = UDim2.new(0, 10, 0, 45)
-PageContainer.BackgroundTransparency = 1
+local Pages = Instance.new("Frame", MainFrame)
+Pages.Size = UDim2.new(1, -20, 1, -60)
+Pages.Position = UDim2.new(0, 10, 0, 50)
+Pages.BackgroundTransparency = 1
 
 local Tabs = {}
 local function CreateTab(name)
-    local b = Instance.new("TextButton", TabContainer)
-    b.Size = UDim2.new(0.333, 0, 1, 0)
-    b.Text = name:upper()
-    b.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    b.TextColor3 = Color3.new(0.8, 0.8, 0.8)
-    b.Font = "GothamBold"
-    b.BorderSizePixel = 0
+    local btn = Instance.new("TextButton", TabFrame)
+    btn.Size = UDim2.new(0.333, 0, 1, 0)
+    btn.Text = name:upper()
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btn.Font = Enum.Font.GothamBold
+    btn.BorderSizePixel = 0
     
-    local p = Instance.new("ScrollingFrame", PageContainer)
-    p.Size = UDim2.new(1, 0, 1, 0)
-    p.Visible = false
-    p.BackgroundTransparency = 1
-    p.ScrollBarThickness = 2
-    Instance.new("UIListLayout", p).Padding = UDim.new(0, 5)
+    local pg = Instance.new("ScrollingFrame", Pages)
+    pg.Size = UDim2.new(1, 0, 1, 0)
+    pg.Visible = false
+    pg.BackgroundTransparency = 1
+    pg.ScrollBarThickness = 2
+    Instance.new("UIListLayout", pg).Padding = UDim.new(0, 5)
     
-    b.MouseButton1Click:Connect(function()
+    btn.MouseButton1Click:Connect(function()
         for _, v in pairs(Tabs) do v.Visible = false end
-        p.Visible = true
+        pg.Visible = true
     end)
-    Tabs[name] = p
-    return p
+    Tabs[name] = pg
+    return pg
 end
 
 local MainTab = CreateTab("Main")
@@ -104,8 +111,8 @@ local function AddToggle(parent, text, var)
     local f = Instance.new("Frame", parent)
     f.Size = UDim2.new(1, 0, 0, 35); f.BackgroundTransparency = 1
     local b = Instance.new("TextButton", f)
-    b.Size = UDim2.new(0, 20, 0, 20); b.Position = UDim2.new(0, 5, 0.5, -10)
-    b.BackgroundColor3 = _G.Config[var] and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(45, 45, 45)
+    b.Size = UDim2.new(0, 18, 0, 18); b.Position = UDim2.new(0, 5, 0.5, -9)
+    b.BackgroundColor3 = _G.Config[var] and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(40, 40, 40)
     b.Text = ""
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 4)
     local l = Instance.new("TextLabel", f)
@@ -113,80 +120,94 @@ local function AddToggle(parent, text, var)
     
     b.MouseButton1Click:Connect(function()
         _G.Config[var] = not _G.Config[var]
-        b.BackgroundColor3 = _G.Config[var] and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(45, 45, 45)
+        b.BackgroundColor3 = _G.Config[var] and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(40, 40, 40)
     end)
 end
 
-AddToggle(MainTab, "Auto Farm (Stick Top)", "AutoFarm")
-AddToggle(MainTab, "Aimbot", "Aimbot")
-AddToggle(MainTab, "Auto Shoot", "AutoShoot")
-AddToggle(MainTab, "Fly (Zero Drift)", "Fly")
+-- 버튼 배치
+AddToggle(MainTab, "Auto Farm (Top)", "AutoFarm")
+AddToggle(MainTab, "Aimbot (Lock On)", "Aimbot")
+AddToggle(MainTab, "Auto Shoot (On Target)", "AutoShoot")
+AddToggle(MainTab, "Fly (Stable / Directional)", "Fly")
 AddToggle(MainTab, "Noclip", "Noclip")
-AddToggle(VisualsTab, "Blue ESP Highlight", "ESP")
+AddToggle(MainTab, "Infinite Jump", "InfJump")
+AddToggle(VisualsTab, "Player ESP", "ESP")
 
--- [[ 3. 개선된 Fly 로직 (1인칭 완벽 지원) ]] --
-local flySpeed = 50
-local bv, bg
+-- Misc: 스킨 체인저 복구
+local SkinBtn = Instance.new("TextButton", MiscTab)
+SkinBtn.Size = UDim2.new(1, 0, 0, 40); SkinBtn.Text = "Unlock All Skins"; SkinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30); SkinBtn.TextColor3 = Color3.fromRGB(255, 150, 0); SkinBtn.Font = "GothamBold"
+SkinBtn.MouseButton1Click:Connect(function()
+    pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/QP-Offcial/Roblox/refs/heads/main/UnlockAll.lua"))() end)
+end)
 
-local function StartFly()
-    local char = LocalPlayer.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
-    bv = Instance.new("BodyVelocity", char.HumanoidRootPart)
-    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bg = Instance.new("BodyGyro", char.HumanoidRootPart)
-    bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-    
-    task.spawn(function()
-        while _G.Config.Fly do
-            RunService.RenderStepped:Wait()
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if not hum then break end
-            
-            hum.PlatformStand = true
-            bg.CFrame = Camera.CFrame
-            
-            local moveDir = hum.MoveDirection
-            if moveDir.Magnitude > 0 then
-                -- 1인칭과 3인칭 모두 대응하는 카메라 기준 좌표계 이동
-                local look = Camera.CFrame.LookVector
-                local right = Camera.CFrame.RightVector
-                bv.Velocity = (look * moveDir.Z + right * moveDir.X).Unit * _G.Config.FlySpeed
-            else
-                bv.Velocity = Vector3.new(0, 0.1, 0) -- 멈추면 전진 안 함
-            end
+-- [[ 3. 고성능 로직 (Aimbot & Fly 고침) ]] --
+
+local function GetNearest()
+    local target, dist = nil, math.huge
+    for _, v in pairs(Players:GetPlayers()) do
+        if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") and v.Character.Humanoid.Health > 0 then
+            local d = (v.Character.HumanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            if d < dist then target = v; dist = d end
         end
-        if bv then bv:Destroy() end
-        if bg then bg:Destroy() end
-        if char:FindFirstChildOfClass("Humanoid") then char.Humanoid.PlatformStand = false end
+    end
+    return target
+end
+
+-- Fly 로직 (완전 고침)
+local flying = false
+local function ToggleFly()
+    local char = LocalPlayer.Character
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    flying = true
+    local bv = Instance.new("BodyVelocity", hrp); bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge); bv.Velocity = Vector3.zero
+    local bg = Instance.new("BodyGyro", hrp); bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+
+    task.spawn(function()
+        while _G.Config.Fly and char and char.Parent do
+            RunService.RenderStepped:Wait()
+            local moveDir = char.Humanoid.MoveDirection
+            bg.CFrame = Camera.CFrame
+            if moveDir.Magnitude > 0 then
+                bv.Velocity = (Camera.CFrame.LookVector * moveDir.Z + Camera.CFrame.RightVector * moveDir.X).Unit * _G.Config.FlySpeed
+            else
+                bv.Velocity = Vector3.new(0, 0.1, 0)
+            end
+            char.Humanoid.PlatformStand = true
+        end
+        bv:Destroy(); bg:Destroy(); char.Humanoid.PlatformStand = false; flying = false
     end)
 end
 
--- [[ 4. 루프 및 기타 기능 ]] --
 RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local target = GetNearest()
+
+    if _G.Config.Fly and not flying then ToggleFly() end
     
-    if _G.Config.Fly and (not bv or not bv.Parent) then StartFly() end
-    
-    -- Farm & Noclip
-    if _G.Config.AutoFarm or _G.Config.Noclip then
-        for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
+    -- Aimbot 고침 (부드러운 조준)
+    if _G.Config.Aimbot and target then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, target.Character.HumanoidRootPart.Position)
     end
     
-    if _G.Config.AutoFarm then
-        local target, dist = nil, math.huge
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-                local d = (p.Character.HumanoidRootPart.Position - char.HumanoidRootPart.Position).Magnitude
-                if d < dist then target = p; dist = d end
-            end
-        end
-        if target then char.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 6, 0) end
+    -- Auto Shoot
+    if _G.Config.AutoShoot and target then
+        local tool = char:FindFirstChildOfClass("Tool")
+        if tool then tool:Activate() end
+    end
+
+    -- Farm & Noclip
+    if _G.Config.AutoFarm and target then
+        char.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame * CFrame.new(0, 6, 0)
+        char.HumanoidRootPart.Velocity = Vector3.zero
+    end
+    if _G.Config.Noclip or _G.Config.AutoFarm then
+        for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
     end
 end)
 
--- ESP (Highlight 방식)
+-- ESP 
 task.spawn(function()
     while task.wait(1) do
         for _, p in pairs(Players:GetPlayers()) do
@@ -204,4 +225,11 @@ task.spawn(function()
     end
 end)
 
-game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB | V", Text = "긴급 패치 완료 (V12)", Duration = 3})
+-- 무한 점프
+UserInputService.JumpRequest:Connect(function()
+    if _G.Config.InfJump and LocalPlayer.Character then
+        LocalPlayer.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+    end
+end)
+
+game:GetService("StarterGui"):SetCore("SendNotification", {Title = "AXIS HUB | V", Text = "Shift 키로 메뉴를 켜고 끌 수 있습니다.", Duration = 4})
